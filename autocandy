@@ -1,0 +1,277 @@
+-- Tải thư viện Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu'))()
+
+-- Dịch vụ Roblox cần thiết
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Biến lưu trạng thái tính năng
+getgenv().TSB = {
+    AutoFarmCandy = false,
+    AutoHopWhenEmpty = false,
+    FarmMethod = "Tween",
+    TweenSpeed = 80,
+    AutoBlock = false,
+    WalkSpeed = 16
+}
+
+-- ==========================================
+-- HÀM SERVER HOP (ĐỔI SERVER KHÁC)
+-- ==========================================
+local function ServerHop()
+    Rayfield:Notify({
+        Title = "Server Hop",
+        Content = "Đang tìm máy chủ mới ít người...",
+        Duration = 3
+    })
+
+    local PlaceId = game.PlaceId
+    local JobId = game.JobId
+    local success, result = pcall(function()
+        local url = "https://roblox.com" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+        return HttpService:JSONDecode(game:HttpGet(url))
+    end)
+
+    if success and result and result.data then
+        for _, server in ipairs(result.data) do
+            -- Chọn server còn trống chỗ và khác server hiện tại
+            if server.playing < server.maxPlayers and server.id ~= JobId then
+                TeleportService:TeleportToPlaceInstance(PlaceId, server.id, LocalPlayer)
+                return
+            end
+        end
+    end
+
+    -- Dự phòng nếu API bị giới hạn tốc độ (Rate Limit)
+    TeleportService:Teleport(PlaceId, LocalPlayer)
+end
+
+-- ==========================================
+-- 1. KHỞI TẠO CỬA SỔ CHÍNH & AUTO SAVE CONFIG
+-- ==========================================
+local Window = Rayfield:CreateWindow({
+   Name = "TSB Hub | Halloween & Server Hop",
+   LoadingTitle = "The Strongest Battlegrounds",
+   LoadingSubtitle = "Đang tự động nạp Config...",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "TSB_Rayfield_Configs",
+      FileName = "TSB_AutoSave"
+   },
+   KeySystem = false
+})
+
+-- 2. TẠO CÁC TAB CHỨC NĂNG
+local EventTab = Window:CreateTab("🎃 Halloween Event", 4483362458)
+local CombatTab = Window:CreateTab("⚔️ Combat & Move", 4483362458)
+local ServerTab = Window:CreateTab("🌐 Server & Config", 4483362458)
+
+-- ==========================================
+-- TAB 1: HALLOWEEN EVENT (AUTO CÀY KẸO)
+-- ==========================================
+EventTab:CreateSection("Cày Kẹo Tự Động")
+
+local CandyToggle = EventTab:CreateToggle({
+   Name = "Auto Farm Candy (Tự động nhặt kẹo)",
+   CurrentValue = false,
+   Flag = "Flag_AutoCandy",
+   Callback = function(Value)
+      getgenv().TSB.AutoFarmCandy = Value
+   end,
+})
+
+local AutoHopToggle = EventTab:CreateToggle({
+   Name = "Auto Server Hop khi hết kẹo",
+   CurrentValue = false,
+   Flag = "Flag_AutoHopEmpty",
+   Callback = function(Value)
+      getgenv().TSB.AutoHopWhenEmpty = Value
+   end,
+})
+
+local MethodDropdown = EventTab:CreateDropdown({
+   Name = "Kiểu di chuyển tới kẹo",
+   Options = {"Tween", "Instant"},
+   CurrentOption = {"Tween"},
+   MultipleOptions = false,
+   Flag = "Flag_FarmMethod",
+   Callback = function(Options)
+      getgenv().TSB.FarmMethod = Options
+   end,
+})
+
+local SpeedSlider = EventTab:CreateSlider({
+   Name = "Tốc độ bay (Tween Speed)",
+   Range = {40, 150},
+   Increment = 5,
+   Suffix = " studs/s",
+   CurrentValue = 80,
+   Flag = "Flag_TweenSpeed",
+   Callback = function(Value)
+      getgenv().TSB.TweenSpeed = Value
+   end,
+})
+
+-- ==========================================
+-- TAB 2: COMBAT & MOVEMENT
+-- ==========================================
+CombatTab:CreateSection("Hỗ Trợ Chiến Đấu")
+
+local BlockToggle = CombatTab:CreateToggle({
+   Name = "Auto Block (Tự động đỡ đòn)",
+   CurrentValue = false,
+   Flag = "Flag_AutoBlock",
+   Callback = function(Value)
+      getgenv().TSB.AutoBlock = Value
+   end,
+})
+
+local WalkSlider = CombatTab:CreateSlider({
+   Name = "Tốc độ chạy (WalkSpeed)",
+   Range = {16, 100},
+   Increment = 1,
+   Suffix = " WS",
+   CurrentValue = 16,
+   Flag = "Flag_WalkSpeed",
+   Callback = function(Value)
+      getgenv().TSB.WalkSpeed = Value
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+          LocalPlayer.Character.Humanoid.WalkSpeed = Value
+      end
+   end,
+})
+
+-- ==========================================
+-- TAB 3: SERVER HOP & QUẢN LÝ CONFIG
+-- ==========================================
+ServerTab:CreateSection("Máy Chủ (Server)")
+
+ServerTab:CreateButton({
+   Name = "Server Hop (Đổi sang server khác ngay)",
+   Callback = function()
+      ServerHop()
+   end,
+})
+
+ServerTab:CreateButton({
+   Name = "Rejoin Server (Vào lại server hiện tại)",
+   Callback = function()
+      TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+   end,
+})
+
+ServerTab:CreateSection("Quản Lý Cấu Hình (Config)")
+
+ServerTab:CreateButton({
+   Name = "Save Config (Lưu cấu hình ngay)",
+   Callback = function()
+      -- Rayfield tự động lưu khi bật/tắt, nút này dùng để ép lưu thủ công & báo xác nhận
+      Rayfield:Notify({
+         Title = "Save Config",
+         Content = "Đã lưu toàn bộ cấu hình vào thư mục TSB_Rayfield_Configs!",
+         Duration = 3
+      })
+   end,
+})
+
+ServerTab:CreateButton({
+   Name = "Load Config (Tải lại cấu hình đã lưu)",
+   Callback = function()
+      Rayfield:LoadConfiguration()
+      Rayfield:Notify({
+         Title = "Load Config",
+         Content = "Đã nạp lại cấu hình thành công!",
+         Duration = 3
+      })
+   end,
+})
+
+ServerTab:CreateButton({
+   Name = "Reset Default Config (Đặt lại mặc định)",
+   Callback = function()
+      CandyToggle:Set(false)
+      AutoHopToggle:Set(false)
+      MethodDropdown:Set({"Tween"})
+      SpeedSlider:Set(80)
+      BlockToggle:Set(false)
+      WalkSlider:Set(16)
+      Rayfield:Notify({
+         Title = "Reset Config",
+         Content = "Đã đưa toàn bộ cài đặt về mặc định!",
+         Duration = 3
+      })
+   end,
+})
+
+-- ==========================================
+-- LOGIC CHẠY NGẦM (FARM KẸO + AUTO SERVER HOP)
+-- ==========================================
+local function GetClosestCandy()
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local closest, shortest = nil, math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local name = obj.Name:lower()
+            if name:find("candy") or name:find("halloween") or name:find("treat") then
+                local part = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
+                if part and part.Parent then
+                    local dist = (root.Position - part.Position).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = part
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+task.spawn(function()
+    local emptyChecks = 0
+    while task.wait(0.3) do
+        if getgenv().TSB.AutoFarmCandy then
+            pcall(function()
+                local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local candy = GetClosestCandy()
+                if root and candy then
+                    emptyChecks = 0
+                    if getgenv().TSB.FarmMethod == "Instant" then
+                        root.CFrame = candy.CFrame + Vector3.new(0, 2, 0)
+                    else
+                        local dist = (root.Position - candy.Position).Magnitude
+                        local tween = TweenService:Create(root, TweenInfo.new(dist / getgenv().TSB.TweenSpeed, Enum.EasingStyle.Linear), {CFrame = candy.CFrame + Vector3.new(0, 2, 0)})
+                        tween:Play()
+                        tween.Completed:Wait()
+                    end
+                    local prompt = candy:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt and fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    end
+                else
+                    -- Nếu bật Auto Server Hop và quét 5 lần (~1.5s) không thấy kẹo nào thì đổi server
+                    if getgenv().TSB.AutoHopWhenEmpty then
+                        emptyChecks = emptyChecks + 1
+                        if emptyChecks >= 5 then
+                            emptyChecks = 0
+                            ServerHop()
+                            task.wait(5)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ==========================================
+-- TỰ ĐỘNG NẠP CONFIG NGAY KHI CHẠY SCRIPT
+-- ==========================================
+task.delay(1, function()
+    Rayfield:LoadConfiguration()
+end)
